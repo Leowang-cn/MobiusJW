@@ -75,13 +75,12 @@ class ImageFrame(tk.Frame):
         popup._tk_img = None
         drag_data = {'x': 0, 'y': 0, 'img_x': 0, 'img_y': 0}
         canvas._img_id = None
-        # 计算初始缩放比例，使图片宽度适应弹层宽度
-        popup.update_idletasks()
-        popup_w = canvas.winfo_width() or 1200
+        # 初始缩放比例设为 1.0，实际缩放在窗口显示后计算
         img_w, img_h = orig_img.size
-        init_scale = min(popup_w / img_w, 1.0)
-        scale_var = [init_scale]
-        def render_img():
+        scale_var = [1.0]
+        initial_scale_done = [False]
+        
+        def render_img(reset_position=False):
             w, h = orig_img.size
             scale = scale_var[0]
             new_w, new_h = int(w*scale), int(h*scale)
@@ -97,8 +96,17 @@ class ImageFrame(tk.Frame):
             canvas.delete("all")
             c_w = canvas.winfo_width()
             c_h = canvas.winfo_height()
-            x = drag_data.get('img_x', max((c_w-new_w)//2, 0))
-            y = drag_data.get('img_y', max((c_h-new_h)//2, 0))
+            
+            # 如果需要重置位置或第一次渲染，则居中显示
+            if reset_position or 'img_x' not in drag_data:
+                x = max((c_w - new_w) // 2, 0)
+                y = max((c_h - new_h) // 2, 0)
+                drag_data['img_x'] = x
+                drag_data['img_y'] = y
+            else:
+                x = drag_data['img_x']
+                y = drag_data['img_y']
+            
             canvas._img_id = canvas.create_image(x, y, anchor="nw", image=tk_img)
             popup._tk_img = tk_img
             popup._current_pil_img = img
@@ -159,23 +167,41 @@ class ImageFrame(tk.Frame):
             sel_bottom = min(orig_img.size[1], sel_bottom)
             if sel_right > sel_left and sel_bottom > sel_top:
                 region = orig_img.crop((sel_left, sel_top, sel_right, sel_bottom))
-                # 复制到剪贴板（仅macOS）
+                # 复制到剪贴板（跨平台支持）
                 try:
                     import platform
-                    if platform.system() != 'Darwin':
-                        messagebox.showinfo("提示", "当前仅支持macOS图片复制")
+                    system = platform.system()
+                    
+                    if system == 'Darwin':
+                        # macOS 使用 AppKit
+                        from AppKit import NSPasteboard, NSPasteboardTypePNG, NSImage
+                        from Foundation import NSData
+                        import io
+                        output = io.BytesIO()
+                        region.save(output, format='PNG')
+                        data = output.getvalue()
+                        nsdata = NSData.dataWithBytes_length_(data, len(data))
+                        image = NSImage.alloc().initWithData_(nsdata)
+                        pb = NSPasteboard.generalPasteboard()
+                        pb.clearContents()
+                        pb.writeObjects_([image])
+                    elif system == 'Windows':
+                        # Windows 使用 win32clipboard
+                        import win32clipboard
+                        import io
+                        output = io.BytesIO()
+                        # 使用 BMP 格式，因为 Windows 剪贴板对 BMP 支持最好
+                        region.convert('RGB').save(output, 'BMP')
+                        data = output.getvalue()[14:]  # BMP 文件头是 14 字节，剪贴板不需要
+                        win32clipboard.OpenClipboard()
+                        win32clipboard.EmptyClipboard()
+                        win32clipboard.SetClipboardData(win32clipboard.CF_DIB, data)
+                        win32clipboard.CloseClipboard()
+                    else:
+                        # Linux 等其他系统暂不支持
+                        messagebox.showinfo("提示", f"当前系统 ({system}) 的图片复制功能暂未实现")
                         return
-                    from AppKit import NSPasteboard, NSPasteboardTypePNG, NSImage
-                    from Foundation import NSData
-                    import io
-                    output = io.BytesIO()
-                    region.save(output, format='PNG')
-                    data = output.getvalue()
-                    nsdata = NSData.dataWithBytes_length_(data, len(data))
-                    image = NSImage.alloc().initWithData_(nsdata)
-                    pb = NSPasteboard.generalPasteboard()
-                    pb.clearContents()
-                    pb.writeObjects_([image])
+                    
                     show_auto_tip("选区已复制到剪贴板！", parent=popup, duration=1200)
                 except Exception as e:
                     messagebox.showerror("错误", f"复制图片到剪贴板失败: {str(e)}")
@@ -191,14 +217,37 @@ class ImageFrame(tk.Frame):
             delta = event.delta
             if abs(delta) < 10:
                 delta = delta * 120
+            
+            old_scale = scale_var[0]
             if delta > 0:
                 scale_var[0] = min(scale_var[0]*1.15, 10.0)
             else:
                 scale_var[0] = max(scale_var[0]/1.15, 0.1)
-            drag_data['img_x'] = max((canvas.winfo_width()-int(orig_img.size[0]*scale_var[0]))//2, 0)
-            drag_data['img_y'] = max((canvas.winfo_height()-int(orig_img.size[1]*scale_var[0]))//2, 0)
+            
+            # 保持图片中心点位置不变
+            if canvas._img_id is not None:
+                coords = canvas.coords(canvas._img_id)
+                old_x, old_y = coords[0], coords[1]
+                old_w, old_h = int(img_w * old_scale), int(img_h * old_scale)
+                new_w, new_h = int(img_w * scale_var[0]), int(img_h * scale_var[0])
+                
+                # 计算图片中心点在画布上的位置，并保持不变
+                center_x = old_x + old_w / 2
+                center_y = old_y + old_h / 2
+                
+                drag_data['img_x'] = int(center_x - new_w / 2)
+                drag_data['img_y'] = int(center_y - new_h / 2)
+            
             render_img()
         def on_resize(event):
+            # 首次渲染时，计算初始缩放使图片宽度等于窗口宽度
+            if not initial_scale_done[0]:
+                c_w = canvas.winfo_width()
+                if c_w > 1:  # 确保窗口已正确初始化
+                    scale_var[0] = c_w / img_w
+                    initial_scale_done[0] = True
+                    render_img(reset_position=True)
+                    return
             render_img()
         def on_press(event):
             drag_data['x'] = event.x
