@@ -56,7 +56,7 @@ try:
         try:
             base_path = sys._MEIPASS
         except Exception:
-            base_path = os.path.abspath(".")
+            base_path = os.path.dirname(os.path.abspath(__file__))
         return os.path.join(base_path, relative_path)
 
     # 修改：使用resource_path函数加载logo
@@ -84,13 +84,13 @@ except Exception as e:
 # 显示标题和版本号
 title_label = tk.Label(top_frame, 
                       text="MobiusJ",
-                      font=font.Font(family=".SF NS Text", size=30),
+                      font=font.Font(family="Microsoft YaHei", size=30),
                       fg="#2c3e50")
 title_label.pack(pady=(0,10))  # 标题与版本号间距10px
 
 version_label = tk.Label(top_frame,
                        text="V0.0.9",
-                       font=font.Font(family=".SF NS Text", size=14),
+                       font=font.Font(family="Microsoft YaHei", size=14),
                        fg="#666666")
 version_label.pack(pady=(10,10))  # 版本号上下各10px间距
 
@@ -103,7 +103,7 @@ style = ttk.Style()
 style.theme_use('default')
 style.configure(
     "TButton",
-    font=(".SF NS Text", 13),
+    font=("Microsoft YaHei", 13),
     foreground="#333333",
     background="#e6f0fa",
     borderwidth=0,
@@ -128,7 +128,7 @@ def create_hover_effect(widget):
 
 style.configure(
     "Hover.TButton",
-    font=(".SF NS Text", 13),
+    font=("Microsoft YaHei", 13),
     foreground="#2980b9",
     background="#f5faff",
     borderwidth=0,

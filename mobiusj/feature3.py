@@ -2,27 +2,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 import config
-import json
 import os
 import webbrowser
 from datetime import datetime
-import sys
-
-def get_settings_path():
-    """
-    返回与 .app 可执行文件所在目录下的 settings.json 路径
-    即：如果 .app 在 dist/ 下，就去 dist/ 下找 settings.json
-    """
-    if getattr(sys, 'frozen', False):
-        # sys.executable 是 dist/MobiusJ.app/Contents/MacOS/MobiusJ
-        # 所以 dirname(sys.executable) 是 dist/MobiusJ.app/Contents/MacOS
-        # 再往上两级：dist/MobiusJ.app → dist/
-        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(sys.executable)))
-    else:
-        # 普通运行时：基于当前脚本位置
-        app_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    return os.path.join(app_dir, "settings.json")
 
 def get_subject_param():
     settings = config.load_settings()
