@@ -1,0 +1,50 @@
+#############################
+1.创建环境
+-------------
+# 定位文件夹：
+如果你已经在 VS脚本 目录下，可以直接使用相对路径进入目标文件夹
+cd "25-6-27 批量删除固定文件夹"
+# 创建虚拟环境（venv 是推荐的方式）
+python -m venv .venv
+python3 -m venv .venv
+
+# 激活环境
+Windows	                |.venv\Scripts\activate
+macOS / Linux	|source .venv/bin/activate
+
+# 配置 VSCode 使用该虚拟环境
+## 打开任意 .py 文件。
+## 按下 Ctrl + Shift + P（Windows/Linux）或 Cmd + Shift + P（Mac），输入并选择：
+Python: Select Interpreter
+## 在弹出的列表中选择你刚刚创建的 .venv 路径下的 Python 解释器。
+
+# 安装依赖包（可选）
+现在你可以在这个虚拟环境中安装你需要的包，例如：pip install flask requests
+
+# Tips：
+忽略虚拟环境目录：将 .venv 添加到 .gitignore 文件中，避免提交到 Git。 示例内容：.venv/
+--------------
+
+#######################
+2.打包
+-------------
+# 激活环境（同上）
+# 安装 PyInstaller    |pip install pyinstaller
+# 打包你的 Python 脚本为 EXE（隐藏控制台窗口）
+假设你的 Python 脚本是 main.py，你可以使用以下命令打包为无窗口的 .exe 文件：|pyinstaller --onefile -w main.py
+	--onefile：打包为一个单独的 EXE 文件（否则会有很多依赖文件）。
+	-w 或 --noconsole：不显示控制台窗口（适用于 GUI 应用程序）。
+	如果你有图标，可以用 --icon=app.ico 来指定图标。
+如果你的程序需要额外的资源文件（比如 config.json, image.png），你需要告诉 PyInstaller 包含这些文件：|pyinstaller --onefile -w --add-data "image.png;." --add-data "config.json;." main.py
+#######################
+3.需求
+--------------
+写一个py脚本，实现如下功能：
+- 选择一个文件夹，遍历这个文件夹中的各级子文件夹，若文件夹名称为“教师版”，则删除该文件夹及里面包含的内容。
+--------------
+
+#######################
+4.背景
+--------------
+家明给的教师版，和原补充资料文件架构不一致。
+--------------
