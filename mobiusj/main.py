@@ -5,6 +5,10 @@ import tkinter as tk
 from tkinter import ttk  # 新增
 import sys
 import os
+import json
+import base64
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from tkinter import font
 import feature1
 import feature2
@@ -15,6 +19,106 @@ import item_management  # 新增导入
 import TF_Question_Management  # 新增导入
 import item_query  # 新增题目查询功能导入
 import config  # 显式导入 config，确保打包工具识别
+
+_import_server = None
+_import_token = None
+
+def _build_import_handler(main_root, expected_token):
+    class ImportHandler(BaseHTTPRequestHandler):
+        def _send_json(self, status_code, payload):
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _send_cors_headers(self):
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+        def do_OPTIONS(self):
+            self.send_response(204)
+            self._send_cors_headers()
+            self.end_headers()
+
+        def do_POST(self):
+            if self.path != "/import":
+                self._send_json(404, {"ok": False, "message": "Not Found"})
+                return
+
+            try:
+                content_length = int(self.headers.get("Content-Length", "0"))
+                raw_body = self.rfile.read(content_length)
+                data = json.loads(raw_body.decode("utf-8"))
+            except Exception:
+                self._send_json(400, {"ok": False, "message": "Invalid JSON"})
+                return
+
+            token = data.get("token")
+            if expected_token and token != expected_token:
+                self._send_json(403, {"ok": False, "message": "Invalid token"})
+                return
+
+            question_id = (data.get("id") or "").strip()
+            image_base64 = data.get("imageBase64") or ""
+            if not question_id or not image_base64:
+                self._send_json(400, {"ok": False, "message": "Missing id or image"})
+                return
+
+            if image_base64.startswith("data:"):
+                try:
+                    image_base64 = image_base64.split(",", 1)[1]
+                except Exception:
+                    self._send_json(400, {"ok": False, "message": "Invalid image data"})
+                    return
+
+            try:
+                image_bytes = base64.b64decode(image_base64)
+            except Exception:
+                self._send_json(400, {"ok": False, "message": "Invalid base64"})
+                return
+
+            def _import_on_ui_thread():
+                try:
+                    feature1.import_question_from_external(question_id, image_bytes)
+                except Exception:
+                    pass
+
+            try:
+                main_root.after(0, _import_on_ui_thread)
+            except Exception:
+                self._send_json(500, {"ok": False, "message": "Client not ready"})
+                return
+
+            self._send_json(200, {"ok": True, "message": "Imported"})
+
+        def log_message(self, format, *args):
+            return
+
+    return ImportHandler
+
+def start_import_server(main_root):
+    global _import_server, _import_token
+    if _import_server is not None:
+        return _import_server
+
+    token = config.get_or_create_token()
+    _import_token = token
+    handler_cls = _build_import_handler(main_root, token)
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", 27777), handler_cls)
+    except Exception as e:
+        print(f"导入服务启动失败: {e}")
+        return None
+
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    _import_server = server
+    print("导入服务已启动: http://127.0.0.1:27777/import")
+    return server
 def on_item_query():
     item_query.item_query()
 
@@ -44,6 +148,9 @@ root = tk.Tk()
 root.title("MobiusJ 0.0.9")
 root.geometry("1000x600+100+100")  # 设置窗口位置
 root.minsize(800, 500)  # 设置最小尺寸
+
+feature1.set_main_root(root)
+start_import_server(root)
 
 # 创建顶部框架用于LOGO和标题
 top_frame = tk.Frame(root)
@@ -89,7 +196,7 @@ title_label = tk.Label(top_frame,
 title_label.pack(pady=(0,10))  # 标题与版本号间距10px
 
 version_label = tk.Label(top_frame,
-                       text="V0.0.9",
+                       text="V0.1.0",
                        font=font.Font(family="Microsoft YaHei", size=14),
                        fg="#666666")
 version_label.pack(pady=(10,10))  # 版本号上下各10px间距
@@ -173,5 +280,35 @@ create_hover_effect(button_TF)
 button4 = ttk.Button(frame, text="设置", command=on_feature4, style="TButton")
 button4.grid(row=1, column=1, padx=10, pady=10, ipadx=button_width, ipady=button_height, columnspan=4, sticky="w")
 create_hover_effect(button4)
+
+# 底部 token 展示与复制
+token_frame = tk.Frame(root)
+token_frame.pack(side=tk.BOTTOM, pady=(0, 10))
+
+token_label_title = tk.Label(token_frame, text="插件Token：", font=font.Font(family="Microsoft YaHei", size=10))
+token_label_title.pack(side=tk.LEFT)
+
+token_value = _import_token or config.get_or_create_token()
+token_var = tk.StringVar(value=token_value)
+token_label = tk.Label(token_frame, textvariable=token_var, font=font.Font(family="Microsoft YaHei", size=10), fg="#2c3e50")
+token_label.pack(side=tk.LEFT, padx=(0, 8))
+
+def copy_token(event=None):
+    try:
+        root.clipboard_clear()
+        root.clipboard_append(token_var.get())
+        root.update()
+    except Exception:
+        pass
+
+copy_token_label = tk.Label(
+    token_frame,
+    text="复制",
+    fg="#1a73e8",
+    cursor="hand2",
+    font=font.Font(family="Microsoft YaHei", size=10, underline=True)
+)
+copy_token_label.pack(side=tk.LEFT)
+copy_token_label.bind("<Button-1>", copy_token)
 
 root.mainloop()

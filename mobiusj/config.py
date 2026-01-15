@@ -2,6 +2,7 @@
 import os
 import sys
 import json
+import secrets
 
 # 获取程序所在目录（开发环境或打包后都适用）
 if getattr(sys, 'frozen', False):
@@ -42,3 +43,13 @@ def save_settings(settings):
 # 新增：获取设置文件路径
 def load_settings_path():
     return SETTINGS_FILE
+
+# 新增：获取或创建本地接口 token
+def get_or_create_token():
+    settings = load_settings()
+    token = settings.get("token")
+    if not token:
+        token = secrets.token_urlsafe(16)
+        settings["token"] = token
+        save_settings(settings)
+    return token

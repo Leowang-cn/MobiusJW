@@ -5,12 +5,102 @@ import os
 import sys
 import subprocess
 import sqlite3
+import io
 import config
 
 tags_data = []
 items_data = {}
 modules_data = []
 selected_tags = []
+
+_main_root = None
+_question_window = None
+_question_id_entry = None
+_img_frame = None
+_query_entry = None
+
+def set_main_root(root):
+    global _main_root
+    _main_root = root
+
+def _register_question_entry_widgets(window, question_id_entry, img_frame, query_entry):
+    global _question_window, _question_id_entry, _img_frame, _query_entry
+    _question_window = window
+    _question_id_entry = question_id_entry
+    _img_frame = img_frame
+    _query_entry = query_entry
+
+    def _on_close():
+        global _question_window, _question_id_entry, _img_frame, _query_entry
+        _question_window = None
+        _question_id_entry = None
+        _img_frame = None
+        _query_entry = None
+        window.destroy()
+
+    window.protocol("WM_DELETE_WINDOW", _on_close)
+
+def ensure_question_entry_window():
+    global _question_window
+    if _question_window is None:
+        question_entry()
+    else:
+        try:
+            if not _question_window.winfo_exists():
+                _question_window = None
+                question_entry()
+            else:
+                _question_window.lift()
+                _question_window.focus_force()
+        except Exception:
+            _question_window = None
+            question_entry()
+
+def import_question_from_external(question_id, image_bytes):
+    ensure_question_entry_window()
+    if _question_window is None:
+        return
+
+    try:
+        if _question_id_entry is not None:
+            _question_id_entry.delete(0, tk.END)
+            _question_id_entry.insert(0, question_id)
+            _question_id_entry.icursor(tk.END)
+    except Exception:
+        pass
+
+    try:
+        from PIL import Image, ImageTk
+        img = Image.open(io.BytesIO(image_bytes))
+        if _img_frame is not None:
+            max_w, max_h = 560, 800
+            w, h = img.size
+            scale = min(max_w / w, max_h / h, 1)
+            if scale < 1:
+                try:
+                    resample = Image.Resampling.LANCZOS
+                except AttributeError:
+                    resample = getattr(Image, 'LANCZOS', Image.BICUBIC)
+                img_disp = img.resize((int(w * scale), int(h * scale)), resample)
+            else:
+                img_disp = img
+            tk_img = ImageTk.PhotoImage(img_disp)
+            _img_frame.img_label.config(image=tk_img, text="")
+            _img_frame.img_label.image = tk_img
+            _img_frame.img_label._original_image = img.copy()
+            _img_frame.img_size_var.set(f"尺寸: {img.size[0]}x{img.size[1]}")
+    except Exception:
+        if _img_frame is not None:
+            _img_frame.img_label.config(image="", text="图片加载失败")
+            _img_frame.img_label.image = None
+            _img_frame.img_label._original_image = None
+            _img_frame.img_size_var.set("尺寸: -")
+
+    try:
+        if _query_entry is not None:
+            _query_entry.focus_set()
+    except Exception:
+        pass
 
 def get_db_path():
     settings = config.load_settings()
@@ -974,6 +1064,7 @@ def question_entry():
     clear_button = tk.Button(buttons_frame, text="清空", width=20, height=1, command=clear_fields)
     clear_button.pack(side=tk.LEFT, padx=5)
 
+    _register_question_entry_widgets(root, question_id_entry, img_frame, query_entry)
     update_tags_table(tags_data)
     update_selected_tags_display()
 
