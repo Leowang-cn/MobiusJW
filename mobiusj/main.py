@@ -145,9 +145,23 @@ def on_TF_question_management():
     TF_Question_Management.TF_question_management()
 
 root = tk.Tk()
-root.title("MobiusJ 0.0.9")
+root.title("MobiusJ")
 root.geometry("1000x600+100+100")  # 设置窗口位置
 root.minsize(800, 500)  # 设置最小尺寸
+
+# 设置窗口图标
+try:
+    def resource_path(relative_path):
+        try:
+            base_path = sys._MEIPASS
+        except Exception:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_path, relative_path)
+    
+    icon_path = resource_path("assets/logo.ico")
+    root.iconbitmap(icon_path)
+except Exception as e:
+    print(f"无法加载窗口图标: {e}")
 
 feature1.set_main_root(root)
 start_import_server(root)
@@ -158,14 +172,6 @@ top_frame.pack(pady=20)
 
 # 加载并显示LOGO
 try:
-    # 获取打包后的资源路径
-    def resource_path(relative_path):
-        try:
-            base_path = sys._MEIPASS
-        except Exception:
-            base_path = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(base_path, relative_path)
-
     # 修改：使用resource_path函数加载logo
     logo_path = resource_path("assets/logo.png")
     logo = tk.PhotoImage(file=logo_path)

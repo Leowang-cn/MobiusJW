@@ -67,7 +67,7 @@ class ImageFrame(tk.Frame):
             return
         popup = tk.Toplevel(self)
         popup.title("图片预览")
-        popup.geometry("900x900")
+        popup.geometry("1200x900")
         popup.resizable(True, True)
         orig_img = self.img_label._original_image
         canvas = tk.Canvas(popup, bg="#222")
@@ -77,7 +77,7 @@ class ImageFrame(tk.Frame):
         canvas._img_id = None
         # 计算初始缩放比例，使图片宽度适应弹层宽度
         popup.update_idletasks()
-        popup_w = canvas.winfo_width() or 900
+        popup_w = canvas.winfo_width() or 1200
         img_w, img_h = orig_img.size
         init_scale = min(popup_w / img_w, 1.0)
         scale_var = [init_scale]
